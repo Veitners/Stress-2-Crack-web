@@ -321,13 +321,15 @@
                 y: Math.max(...y) - Math.min(...y)
             };
             
-            // Estimate optimal point size based on data density
+            // Estimate average distance between nearest neighbors
             const numPoints = x.length;
             const plotArea = dataRange.x * dataRange.y;
-            const pointDensity = numPoints / plotArea;
             
-            // Base size calculation - aim for points to just touch at full zoom out
-            zoomState.baseSize = Math.max(2, Math.min(20, Math.sqrt(plotArea / numPoints) * 50));
+            // Calculate approximate grid spacing if points were evenly distributed
+            const approxSpacing = Math.sqrt(plotArea / numPoints);
+            
+            // Size points to be 1.5x the spacing to ensure overlap
+            zoomState.baseSize = Math.max(10, Math.min(80, approxSpacing * 200));
             
             // Store initial axis ranges for zoom calculation
             const layout = plotDiv.layout;
@@ -362,11 +364,11 @@
                     const zoomFactorY = originalYSpan / currentYSpan;
                     const avgZoomFactor = Math.sqrt(zoomFactorX * zoomFactorY);
                     
-                    // Calculate new point size (increase with zoom)
-                    let newSize = zoomState.baseSize * Math.pow(avgZoomFactor, 0.7);
+                    // Calculate new point size (increase more aggressively with zoom)
+                    let newSize = zoomState.baseSize * Math.pow(avgZoomFactor, 0.8);
                     
-                    // Clamp size to reasonable bounds
-                    newSize = Math.max(1, Math.min(newSize, 100));
+                    // Clamp size to reasonable bounds - allow larger sizes
+                    newSize = Math.max(5, Math.min(newSize, 200));
                     
                     // Update point sizes
                     const update = {
@@ -626,13 +628,14 @@
                             width: null
                         };
                     } else {
-                        // 2D plot - calculate initial size based on data density
+                        // 2D plot - calculate initial size based on point spacing
                         const dataRange = {
                             x: Math.max(...x) - Math.min(...x),
                             y: Math.max(...y) - Math.min(...y)
                         };
                         const plotArea = dataRange.x * dataRange.y;
-                        const initialSize = Math.max(2, Math.min(20, Math.sqrt(plotArea / x.length) * 50));
+                        const approxSpacing = Math.sqrt(plotArea / x.length);
+                        const initialSize = Math.max(10, Math.min(80, approxSpacing * 200));
                         
                         plotData = [{
                             type: 'scatter',
@@ -644,7 +647,9 @@
                                 color: values,
                                 colorscale: colorMap,
                                 showscale: true,
-                                colorbar: { title: `${selectedColumn} (mm)` }
+                                colorbar: { title: `${selectedColumn} (mm)` },
+                                opacity: 0.8,
+                                line: { width: 0 }
                             }
                         }];
 
