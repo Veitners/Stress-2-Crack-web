@@ -201,12 +201,20 @@
                             <label class="form-check-label" for="heatmapMode">Heatmap/Surface Mode</label>
                         </div>
 
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="imageMode" checked>
+                            <label class="form-check-label" for="imageMode">
+                                High-Performance Mode
+                                <small class="text-muted d-block">Renders as image for smooth interaction</small>
+                            </label>
+                        </div>
+
                         <div class="alert alert-info py-2 px-3 mb-3" style="font-size: 12px;">
                             <strong>2D Controls:</strong><br>
                             • Mouse wheel: Zoom in/out<br>
                             • Click + drag: Pan around<br>
                             • Double-click: Reset zoom<br>
-                            • Points auto-scale with zoom
+                            • High-Performance Mode: Smooth interaction for large datasets
                         </div>
 
                         <label for="colorMapSelect">Color Map:</label>
@@ -310,6 +318,311 @@
         let currentLayout = null;
         let resizeTimeout = null;
         let zoomState = { xRange: null, yRange: null, baseSize: 4 };
+        let imageMode = false;
+        let canvasContext = null;
+        let imageData = null;
+
+        // Canvas-based image rendering for performance
+        function createCanvasPlot(x, y, values, selectedColumn, colorMap, viewMode) {
+            const plotContainer = document.getElementById('mainPlot');
+            plotContainer.innerHTML = ''; // Clear existing content
+            
+            // Create canvas element
+            const canvas = document.createElement('canvas');
+            const containerRect = plotContainer.getBoundingClientRect();
+            const width = Math.max(800, containerRect.width - 20);
+            const height = Math.max(600, containerRect.height - 20);
+            
+            canvas.width = width;
+            canvas.height = height;
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            canvas.style.border = '1px solid #ddd';
+            canvas.style.borderRadius = '4px';
+            
+            plotContainer.appendChild(canvas);
+            canvasContext = canvas.getContext('2d');
+            
+            // Calculate data bounds
+            const minX = Math.min(...x);
+            const maxX = Math.max(...x);
+            const minY = Math.min(...y);
+            const maxY = Math.max(...y);
+            const minVal = Math.min(...values);
+            const maxVal = Math.max(...values);
+            
+            // Add padding
+            const padding = 60;
+            const plotWidth = width - 2 * padding;
+            const plotHeight = height - 2 * padding;
+            
+            // Create colormap function
+            const getColor = createColorMapFunction(colorMap, minVal, maxVal);
+            
+            // Clear canvas
+            canvasContext.fillStyle = '#ffffff';
+            canvasContext.fillRect(0, 0, width, height);
+            
+            // Calculate point size based on density
+            const dataRange = (maxX - minX) * (maxY - minY);
+            const pointSize = Math.max(3, Math.min(20, Math.sqrt(dataRange / x.length) * 100));
+            
+            // Draw points
+            for (let i = 0; i < x.length; i++) {
+                // Transform coordinates to canvas space
+                const canvasX = padding + ((x[i] - minX) / (maxX - minX)) * plotWidth;
+                const canvasY = padding + (1 - (y[i] - minY) / (maxY - minY)) * plotHeight; // Flip Y
+                
+                // Get color for this value
+                const color = getColor(values[i]);
+                
+                // Draw point
+                canvasContext.fillStyle = color;
+                canvasContext.beginPath();
+                canvasContext.arc(canvasX, canvasY, pointSize / 2, 0, 2 * Math.PI);
+                canvasContext.fill();
+            }
+            
+            // Draw axes and labels
+            drawAxes(canvasContext, width, height, padding, minX, maxX, minY, maxY, selectedColumn);
+            
+            // Add zoom and pan capabilities to canvas
+            setupCanvasInteraction(canvas, x, y, values, selectedColumn, colorMap, {minX, maxX, minY, maxY});
+            
+            return canvas;
+        }
+        
+        // Create color mapping function for different colormaps
+        function createColorMapFunction(colorMapName, minVal, maxVal) {
+            const range = maxVal - minVal;
+            
+            return function(value) {
+                const normalized = (value - minVal) / range;
+                
+                switch (colorMapName) {
+                    case 'Viridis':
+                        return viridisColor(normalized);
+                    case 'Plasma':
+                        return plasmaColor(normalized);
+                    case 'Jet':
+                        return jetColor(normalized);
+                    case 'RdYlBu':
+                        return rdylbuColor(normalized);
+                    default:
+                        return viridisColor(normalized);
+                }
+            };
+        }
+        
+        // Simplified colormap functions
+        function viridisColor(t) {
+            const r = Math.round(255 * (0.267004 + t * (0.127568 + t * (-0.24394 + t * 0.75761))));
+            const g = Math.round(255 * (0.004874 + t * (0.17766 + t * (0.47204 + t * (-0.25385)))));
+            const b = Math.round(255 * (0.329415 + t * (0.55296 + t * (-0.55276 + t * (-0.05111)))));
+            return `rgb(${Math.max(0, Math.min(255, r))}, ${Math.max(0, Math.min(255, g))}, ${Math.max(0, Math.min(255, b))})`;
+        }
+        
+        function plasmaColor(t) {
+            const r = Math.round(255 * (0.050383 + t * (0.96959 + t * (-0.21425 + t * (-0.36316)))));
+            const g = Math.round(255 * (0.029873 + t * (0.25373 + t * (0.82056 + t * (-1.1135)))));
+            const b = Math.round(255 * (0.527975 + t * (0.25373 + t * (-0.82056 + t * 0.3694))));
+            return `rgb(${Math.max(0, Math.min(255, r))}, ${Math.max(0, Math.min(255, g))}, ${Math.max(0, Math.min(255, b))})`;
+        }
+        
+        function jetColor(t) {
+            const r = Math.round(255 * Math.max(0, Math.min(1, 1.5 - Math.abs(4 * t - 3))));
+            const g = Math.round(255 * Math.max(0, Math.min(1, 1.5 - Math.abs(4 * t - 2))));
+            const b = Math.round(255 * Math.max(0, Math.min(1, 1.5 - Math.abs(4 * t - 1))));
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+        
+        function rdylbuColor(t) {
+            // Red-Yellow-Blue colormap
+            if (t < 0.5) {
+                const r = Math.round(255 * (1 - 2 * t * 0.3));
+                const g = Math.round(255 * (0.4 + t * 1.2));
+                const b = Math.round(255 * (0.2 + t * 0.6));
+                return `rgb(${r}, ${g}, ${b})`;
+            } else {
+                const r = Math.round(255 * (1.4 - t * 1.4));
+                const g = Math.round(255 * (1.6 - t * 1.2));
+                const b = Math.round(255 * (0.2 + (t - 0.5) * 1.6));
+                return `rgb(${r}, ${g}, ${b})`;
+            }
+        }
+        
+        // Draw axes and labels
+        function drawAxes(ctx, width, height, padding, minX, maxX, minY, maxY, selectedColumn) {
+            ctx.strokeStyle = '#333';
+            ctx.fillStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.font = '12px Arial';
+            
+            // Draw axes
+            ctx.beginPath();
+            // X axis
+            ctx.moveTo(padding, height - padding);
+            ctx.lineTo(width - padding, height - padding);
+            // Y axis  
+            ctx.moveTo(padding, padding);
+            ctx.lineTo(padding, height - padding);
+            ctx.stroke();
+            
+            // Draw tick marks and labels
+            const numTicks = 5;
+            
+            // X axis ticks
+            for (let i = 0; i <= numTicks; i++) {
+                const x = padding + (i / numTicks) * (width - 2 * padding);
+                const value = minX + (i / numTicks) * (maxX - minX);
+                
+                ctx.beginPath();
+                ctx.moveTo(x, height - padding);
+                ctx.lineTo(x, height - padding + 5);
+                ctx.stroke();
+                
+                ctx.fillText(value.toFixed(1), x - 15, height - padding + 20);
+            }
+            
+            // Y axis ticks
+            for (let i = 0; i <= numTicks; i++) {
+                const y = padding + (i / numTicks) * (height - 2 * padding);
+                const value = maxY - (i / numTicks) * (maxY - minY); // Flip for display
+                
+                ctx.beginPath();
+                ctx.moveTo(padding - 5, y);
+                ctx.lineTo(padding, y);
+                ctx.stroke();
+                
+                ctx.fillText(value.toFixed(1), 5, y + 4);
+            }
+            
+            // Labels
+            ctx.font = '14px Arial';
+            ctx.fillText('X Coordinate', width / 2 - 40, height - 10);
+            
+            ctx.save();
+            ctx.translate(20, height / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText('Y Coordinate', -40, 0);
+            ctx.restore();
+            
+            // Title
+            ctx.font = '16px Arial';
+            ctx.fillText(`2D Visualization - ${selectedColumn}`, width / 2 - 100, 25);
+        }
+        
+        // Setup canvas interaction (zoom, pan)
+        function setupCanvasInteraction(canvas, x, y, values, selectedColumn, colorMap, bounds) {
+            let isDragging = false;
+            let lastX, lastY;
+            let zoomLevel = 1;
+            let offsetX = 0, offsetY = 0;
+            
+            // Mouse wheel zoom
+            canvas.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+                const newZoom = Math.max(0.5, Math.min(10, zoomLevel * zoomFactor));
+                
+                if (newZoom !== zoomLevel) {
+                    // Zoom towards mouse position
+                    offsetX = mouseX - (mouseX - offsetX) * (newZoom / zoomLevel);
+                    offsetY = mouseY - (mouseY - offsetY) * (newZoom / zoomLevel);
+                    zoomLevel = newZoom;
+                    
+                    redrawCanvas(canvas, x, y, values, selectedColumn, colorMap, bounds, zoomLevel, offsetX, offsetY);
+                }
+            });
+            
+            // Mouse drag pan
+            canvas.addEventListener('mousedown', function(e) {
+                isDragging = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                canvas.style.cursor = 'grabbing';
+            });
+            
+            canvas.addEventListener('mousemove', function(e) {
+                if (isDragging) {
+                    const deltaX = e.clientX - lastX;
+                    const deltaY = e.clientY - lastY;
+                    
+                    offsetX += deltaX;
+                    offsetY += deltaY;
+                    
+                    lastX = e.clientX;
+                    lastY = e.clientY;
+                    
+                    redrawCanvas(canvas, x, y, values, selectedColumn, colorMap, bounds, zoomLevel, offsetX, offsetY);
+                }
+            });
+            
+            canvas.addEventListener('mouseup', function() {
+                isDragging = false;
+                canvas.style.cursor = 'default';
+            });
+            
+            // Double click to reset
+            canvas.addEventListener('dblclick', function() {
+                zoomLevel = 1;
+                offsetX = 0;
+                offsetY = 0;
+                redrawCanvas(canvas, x, y, values, selectedColumn, colorMap, bounds, zoomLevel, offsetX, offsetY);
+            });
+        }
+        
+        // Redraw canvas with zoom and pan
+        function redrawCanvas(canvas, x, y, values, selectedColumn, colorMap, bounds, zoom, offsetX, offsetY) {
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            const padding = 60;
+            
+            // Clear canvas
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+            
+            const {minX, maxX, minY, maxY} = bounds;
+            const minVal = Math.min(...values);
+            const maxVal = Math.max(...values);
+            
+            // Calculate point size based on zoom
+            const baseSize = Math.sqrt((maxX - minX) * (maxY - minY) / x.length) * 100;
+            const pointSize = Math.max(1, Math.min(50, baseSize * zoom * 0.5));
+            
+            const getColor = createColorMapFunction(colorMap, minVal, maxVal);
+            const plotWidth = width - 2 * padding;
+            const plotHeight = height - 2 * padding;
+            
+            // Draw points with zoom and offset
+            for (let i = 0; i < x.length; i++) {
+                let canvasX = padding + ((x[i] - minX) / (maxX - minX)) * plotWidth;
+                let canvasY = padding + (1 - (y[i] - minY) / (maxY - minY)) * plotHeight;
+                
+                // Apply zoom and offset
+                canvasX = (canvasX - width/2) * zoom + width/2 + offsetX;
+                canvasY = (canvasY - height/2) * zoom + height/2 + offsetY;
+                
+                // Only draw if point is visible
+                if (canvasX >= -pointSize && canvasX <= width + pointSize && 
+                    canvasY >= -pointSize && canvasY <= height + pointSize) {
+                    
+                    const color = getColor(values[i]);
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(canvasX, canvasY, pointSize / 2, 0, 2 * Math.PI);
+                    ctx.fill();
+                }
+            }
+            
+            // Redraw axes
+            drawAxes(ctx, width, height, padding, minX, maxX, minY, maxY, selectedColumn);
+        }
 
         // Dynamic point sizing for 2D plots
         function setupDynamicPointSizing(x, y, values, selectedColumn, colorMap) {
@@ -526,6 +839,7 @@
             const viewMode = document.querySelector('input[name="viewMode"]:checked').value;
             const heatmapMode = document.getElementById('heatmapMode').checked;
             const colorMap = document.getElementById('colorMapSelect').value;
+            const useImageMode = document.getElementById('imageMode').checked;
 
             // Get deformation parameters
             const threshold1 = parseFloat(document.getElementById('threshold1').value);
@@ -574,7 +888,25 @@
                         throw new Error('No valid data for selected column');
                     }
 
-                    // Create plot
+                    // Check if using high-performance image mode for 2D plots
+                    if (useImageMode && viewMode === '2D') {
+                        createCanvasPlot(x, y, values, selectedColumn, colorMap, viewMode);
+                        
+                        document.getElementById('loadingSpinner').style.display = 'none';
+                        document.getElementById('plotArea').style.display = 'block';
+
+                        // Update statistics
+                        const stats = {
+                            min: Math.min(...values),
+                            max: Math.max(...values),
+                            mean: values.reduce((a, b) => a + b, 0) / values.length,
+                            std: Math.sqrt(values.reduce((a, b) => a + Math.pow(b - values.reduce((c, d) => c + d, 0) / values.length, 2), 0) / values.length)
+                        };
+                        updateStatistics(stats);
+                        return; // Skip Plotly rendering
+                    }
+
+                    // Create plot using Plotly (fallback or 3D mode)
                     let plotData, layout;
 
                     if (viewMode === '3D') {
@@ -840,6 +1172,7 @@
         document.querySelector('input[name="viewMode"][value="2D"]').addEventListener('change', generatePlot);
         document.querySelector('input[name="viewMode"][value="3D"]').addEventListener('change', generatePlot);
         document.getElementById('heatmapMode').addEventListener('change', generatePlot);
+        document.getElementById('imageMode').addEventListener('change', generatePlot);
         document.getElementById('colorMapSelect').addEventListener('change', generatePlot);
         document.getElementById('applyChanges').addEventListener('click', generatePlot);
         document.getElementById('previewCurve').addEventListener('click', previewCurve);
