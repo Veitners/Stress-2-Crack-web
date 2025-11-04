@@ -206,7 +206,7 @@
                             • Mouse wheel: Zoom in/out<br>
                             • Click + drag: Pan around<br>
                             • Double-click: Reset zoom<br>
-                            • WebGL acceleration for smooth performance
+                            • Points auto-scale with zoom
                         </div>
 
                         <label for="colorMapSelect">Color Map:</label>
@@ -310,8 +310,6 @@
         let currentLayout = null;
         let resizeTimeout = null;
         let zoomState = { xRange: null, yRange: null, baseSize: 4 };
-
-
 
         // Dynamic point sizing for 2D plots
         function setupDynamicPointSizing(x, y, values, selectedColumn, colorMap) {
@@ -528,7 +526,6 @@
             const viewMode = document.querySelector('input[name="viewMode"]:checked').value;
             const heatmapMode = document.getElementById('heatmapMode').checked;
             const colorMap = document.getElementById('colorMapSelect').value;
-            const useImageMode = document.getElementById('imageMode').checked;
 
             // Get deformation parameters
             const threshold1 = parseFloat(document.getElementById('threshold1').value);
@@ -577,25 +574,7 @@
                         throw new Error('No valid data for selected column');
                     }
 
-                    // Check if using high-performance image mode for 2D plots
-                    if (useImageMode && viewMode === '2D') {
-                        createCanvasPlot(x, y, values, selectedColumn, colorMap, viewMode);
-                        
-                        document.getElementById('loadingSpinner').style.display = 'none';
-                        document.getElementById('plotArea').style.display = 'block';
-
-                        // Update statistics
-                        const stats = {
-                            min: Math.min(...values),
-                            max: Math.max(...values),
-                            mean: values.reduce((a, b) => a + b, 0) / values.length,
-                            std: Math.sqrt(values.reduce((a, b) => a + Math.pow(b - values.reduce((c, d) => c + d, 0) / values.length, 2), 0) / values.length)
-                        };
-                        updateStatistics(stats);
-                        return; // Skip Plotly rendering
-                    }
-
-                    // Create plot using Plotly (fallback or 3D mode)
+                    // Create plot
                     let plotData, layout;
 
                     if (viewMode === '3D') {
@@ -659,7 +638,7 @@
                         const initialSize = Math.max(10, Math.min(80, approxSpacing * 200));
                         
                         plotData = [{
-                            type: 'scattergl',  // WebGL-accelerated scatter plot for better performance
+                            type: 'scatter',
                             mode: 'markers',
                             x: x,
                             y: y,
@@ -698,10 +677,6 @@
                             height: null,
                             width: null,
                             dragmode: 'zoom',
-                            // Performance optimizations
-                            showlegend: false,  // Faster rendering
-                            paper_bgcolor: 'white',
-                            plot_bgcolor: 'white',
                             hovermode: 'closest'
                         };
                     }
@@ -710,18 +685,13 @@
                     currentPlotData = plotData;
                     currentLayout = layout;
 
-                    // Optimized configuration for better performance with WebGL
+                    // Create plot with responsive configuration and enable scroll zoom
                     const config = {
                         responsive: true,
                         scrollZoom: viewMode === '2D', // Enable scroll zoom only for 2D plots
                         doubleClick: 'reset', // Double click to reset zoom
                         displayModeBar: true,
-                        displaylogo: false,
-                        modeBarButtonsToAdd: ['pan2d', 'zoom2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d'],
-                        modeBarButtonsToRemove: ['lasso2d', 'select2d'], // Remove performance-heavy tools
-                        // Performance optimizations for WebGL
-                        staticPlot: false,
-                        editable: false
+                        modeBarButtonsToAdd: ['pan2d', 'zoom2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d']
                     };
 
                     Plotly.newPlot('mainPlot', plotData, layout, config);
@@ -870,7 +840,6 @@
         document.querySelector('input[name="viewMode"][value="2D"]').addEventListener('change', generatePlot);
         document.querySelector('input[name="viewMode"][value="3D"]').addEventListener('change', generatePlot);
         document.getElementById('heatmapMode').addEventListener('change', generatePlot);
-        document.getElementById('imageMode').addEventListener('change', generatePlot);
         document.getElementById('colorMapSelect').addEventListener('change', generatePlot);
         document.getElementById('applyChanges').addEventListener('click', generatePlot);
         document.getElementById('previewCurve').addEventListener('click', previewCurve);
