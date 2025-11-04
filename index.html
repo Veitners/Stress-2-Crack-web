@@ -557,8 +557,8 @@
                     currentData.forEach(row => {
                         if (row[selectedColumn] != null) {
                             x.push(row.X);
-                            y.push(row.Y);
-                            z.push(-row.Z);  // Flip Z coordinate by negating it
+                            y.push(-row.Y);
+                            z.push(row.Z);  // Flip Z coordinate by negating it
                             
                             // Apply deformation modification
                             const modifiedValue = modifyDeformation(
