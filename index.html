@@ -52,19 +52,28 @@
         .threshold-inputs input, .output-inputs input { flex: 1; }
         #loadingSpinner { display: none; }
         .github-link { position: fixed; top: 10px; right: 10px; }
-        .main-row { flex: 1; min-height: 0; height: 100%; }
+        .main-row { 
+            flex: 1; 
+            min-height: 0; 
+            height: 100%; 
+            display: flex !important;
+            flex-wrap: nowrap !important;
+        }
         .sidebar-col { 
             overflow-y: auto; 
             max-height: calc(100vh - 100px);
-            flex: 0 0 300px;
-            max-width: 300px;
+            flex: 0 0 300px !important;
+            max-width: 300px !important;
+            min-width: 300px;
+            margin-right: 10px;
         }
         .plot-col { 
             display: flex; 
             flex-direction: column; 
             min-height: 0;
-            flex: 1;
+            flex: 1 !important;
             height: 100%;
+            width: calc(100% - 310px) !important;
         }
         
         /* Ensure plot divs take full space */
@@ -81,21 +90,54 @@
         }
 
         /* Responsive adjustments */
+        @media (max-width: 992px) {
+            .sidebar-col {
+                flex: 0 0 280px !important;
+                max-width: 280px !important;
+                min-width: 280px;
+            }
+            .plot-col {
+                width: calc(100% - 280px) !important;
+            }
+        }
+        
         @media (max-width: 768px) {
             .container-fluid { padding: 5px; }
             .control-panel { padding: 10px; margin-bottom: 10px; }
             .plot-container { padding: 5px; }
             .sidebar-col { 
-                max-height: none; 
-                margin-bottom: 15px; 
-                flex: none;
-                max-width: none;
+                flex: 0 0 250px !important;
+                max-width: 250px !important;
+                min-width: 250px;
+                max-height: calc(100vh - 80px);
+            }
+            .plot-col { 
+                width: calc(100% - 250px) !important;
+                min-height: 400px; 
             }
             .threshold-inputs, .output-inputs { flex-direction: column; gap: 5px; }
-            .main-row { flex-direction: column; }
-            .plot-col { min-height: 400px; }
             #mainPlot, #curveContainer {
                 min-height: 400px;
+            }
+        }
+        
+        /* Only stack vertically on very small screens */
+        @media (max-width: 576px) {
+            .main-row { 
+                flex-direction: column !important; 
+                flex-wrap: wrap !important;
+            }
+            .sidebar-col { 
+                flex: none !important;
+                max-width: 100% !important;
+                min-width: auto !important;
+                width: 100% !important;
+                max-height: 300px;
+                margin-bottom: 10px;
+            }
+            .plot-col {
+                width: 100% !important;
+                flex: 1 !important;
             }
         }
         
@@ -124,9 +166,9 @@
         </div>
 
         <!-- Main Content -->
-        <div class="row main-row g-2">
+        <div class="row main-row g-0">
             <!-- Left Sidebar - Controls -->
-            <div class="col-auto sidebar-col">
+            <div class="sidebar-col">
                 <div class="control-panel">
                     <!-- File Upload -->
                     <h5>📁 File Upload</h5>
@@ -219,7 +261,7 @@
             </div>
 
             <!-- Right Side - Plot Area -->
-            <div class="col plot-col">
+            <div class="plot-col">
                 <div class="plot-container">
                     <div id="loadingSpinner" class="text-center">
                         <div class="spinner-border text-primary" role="status">
