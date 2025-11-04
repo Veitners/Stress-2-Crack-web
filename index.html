@@ -201,6 +201,14 @@
                             <label class="form-check-label" for="heatmapMode">Heatmap/Surface Mode</label>
                         </div>
 
+                        <div class="alert alert-info py-2 px-3 mb-3" style="font-size: 12px;">
+                            <strong>2D Controls:</strong><br>
+                            • Mouse wheel: Zoom in/out<br>
+                            • Click + drag: Pan around<br>
+                            • Double-click: Reset zoom<br>
+                            • Points auto-scale with zoom
+                        </div>
+
                         <label for="colorMapSelect">Color Map:</label>
                         <select id="colorMapSelect" class="form-select mb-3">
                             <option value="Viridis">Viridis</option>
@@ -301,6 +309,78 @@
         let currentPlotData = null;
         let currentLayout = null;
         let resizeTimeout = null;
+        let zoomState = { xRange: null, yRange: null, baseSize: 4 };
+
+        // Dynamic point sizing for 2D plots
+        function setupDynamicPointSizing(x, y, values, selectedColumn, colorMap) {
+            const plotDiv = document.getElementById('mainPlot');
+            
+            // Calculate initial point density and size
+            const dataRange = {
+                x: Math.max(...x) - Math.min(...x),
+                y: Math.max(...y) - Math.min(...y)
+            };
+            
+            // Estimate optimal point size based on data density
+            const numPoints = x.length;
+            const plotArea = dataRange.x * dataRange.y;
+            const pointDensity = numPoints / plotArea;
+            
+            // Base size calculation - aim for points to just touch at full zoom out
+            zoomState.baseSize = Math.max(2, Math.min(20, Math.sqrt(plotArea / numPoints) * 50));
+            
+            // Store initial axis ranges for zoom calculation
+            const layout = plotDiv.layout;
+            if (layout && layout.xaxis && layout.yaxis) {
+                zoomState.xRange = layout.xaxis.range || [Math.min(...x), Math.max(...x)];
+                zoomState.yRange = layout.yaxis.range || [Math.min(...y), Math.max(...y)];
+            }
+            
+            // Add event listener for zoom/pan events
+            plotDiv.on('plotly_relayout', function(eventData) {
+                if (eventData['xaxis.range[0]'] !== undefined || eventData['xaxis.range[1]'] !== undefined ||
+                    eventData['yaxis.range[0]'] !== undefined || eventData['yaxis.range[1]'] !== undefined) {
+                    
+                    // Get current zoom ranges
+                    const currentXRange = [
+                        eventData['xaxis.range[0]'] !== undefined ? eventData['xaxis.range[0]'] : zoomState.xRange[0],
+                        eventData['xaxis.range[1]'] !== undefined ? eventData['xaxis.range[1]'] : zoomState.xRange[1]
+                    ];
+                    
+                    const currentYRange = [
+                        eventData['yaxis.range[0]'] !== undefined ? eventData['yaxis.range[0]'] : zoomState.yRange[0],
+                        eventData['yaxis.range[1]'] !== undefined ? eventData['yaxis.range[1]'] : zoomState.yRange[1]
+                    ];
+                    
+                    // Calculate zoom factor
+                    const currentXSpan = currentXRange[1] - currentXRange[0];
+                    const currentYSpan = currentYRange[1] - currentYRange[0];
+                    const originalXSpan = dataRange.x;
+                    const originalYSpan = dataRange.y;
+                    
+                    const zoomFactorX = originalXSpan / currentXSpan;
+                    const zoomFactorY = originalYSpan / currentYSpan;
+                    const avgZoomFactor = Math.sqrt(zoomFactorX * zoomFactorY);
+                    
+                    // Calculate new point size (increase with zoom)
+                    let newSize = zoomState.baseSize * Math.pow(avgZoomFactor, 0.7);
+                    
+                    // Clamp size to reasonable bounds
+                    newSize = Math.max(1, Math.min(newSize, 100));
+                    
+                    // Update point sizes
+                    const update = {
+                        'marker.size': Array(x.length).fill(newSize)
+                    };
+                    
+                    Plotly.restyle('mainPlot', update, 0);
+                    
+                    // Store current ranges
+                    zoomState.xRange = currentXRange;
+                    zoomState.yRange = currentYRange;
+                }
+            });
+        }
 
         // Deformation modification function
         function modifyDeformation(value, threshold1, threshold2, threshold3, output1, output2, output3) {
@@ -546,14 +626,21 @@
                             width: null
                         };
                     } else {
-                        // 2D plot
+                        // 2D plot - calculate initial size based on data density
+                        const dataRange = {
+                            x: Math.max(...x) - Math.min(...x),
+                            y: Math.max(...y) - Math.min(...y)
+                        };
+                        const plotArea = dataRange.x * dataRange.y;
+                        const initialSize = Math.max(2, Math.min(20, Math.sqrt(plotArea / x.length) * 50));
+                        
                         plotData = [{
                             type: 'scatter',
                             mode: 'markers',
                             x: x,
                             y: y,
                             marker: {
-                                size: 4,
+                                size: initialSize,
                                 color: values,
                                 colorscale: colorMap,
                                 showscale: true,
@@ -567,12 +654,25 @@
                                 x: 0.5,
                                 font: { size: 16 }
                             },
-                            xaxis: { title: 'X Coordinate' },
-                            yaxis: { title: 'Y Coordinate', scaleanchor: 'x' },
+                            xaxis: { 
+                                title: 'X Coordinate',
+                                showspikes: true,
+                                spikemode: 'across',
+                                spikesnap: 'cursor'
+                            },
+                            yaxis: { 
+                                title: 'Y Coordinate', 
+                                scaleanchor: 'x',
+                                showspikes: true,
+                                spikemode: 'across',
+                                spikesnap: 'cursor'
+                            },
                             margin: { l: 50, r: 20, t: 50, b: 50 },
                             autosize: true,
                             height: null,
-                            width: null
+                            width: null,
+                            dragmode: 'zoom',
+                            hovermode: 'closest'
                         };
                     }
 
@@ -580,8 +680,21 @@
                     currentPlotData = plotData;
                     currentLayout = layout;
 
-                    // Create plot with responsive configuration
-                    Plotly.newPlot('mainPlot', plotData, layout, {responsive: true});
+                    // Create plot with responsive configuration and enable scroll zoom
+                    const config = {
+                        responsive: true,
+                        scrollZoom: viewMode === '2D', // Enable scroll zoom only for 2D plots
+                        doubleClick: 'reset', // Double click to reset zoom
+                        displayModeBar: true,
+                        modeBarButtonsToAdd: ['pan2d', 'zoom2d', 'zoomIn2d', 'zoomOut2d', 'autoScale2d', 'resetScale2d']
+                    };
+
+                    Plotly.newPlot('mainPlot', plotData, layout, config);
+
+                    // Add dynamic point sizing for 2D plots
+                    if (viewMode === '2D') {
+                        setupDynamicPointSizing(x, y, values, selectedColumn, colorMap);
+                    }
                     
                     document.getElementById('loadingSpinner').style.display = 'none';
                     document.getElementById('plotArea').style.display = 'block';
