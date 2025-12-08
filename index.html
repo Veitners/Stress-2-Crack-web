@@ -592,7 +592,14 @@
                                     colorscale: colorMap,
                                     showscale: true,
                                     colorbar: { title: `${selectedColumn} (mm)` }
-                                }
+                                },
+                                hovertemplate: '<b>%{text}</b><br>' +
+                                             'X: %{x:.3f}<br>' +
+                                             'Y: %{y:.3f}<br>' +
+                                             'Z: %{z:.3f}<br>' +
+                                             'Value: %{marker.color:.3f}<br>' +
+                                             '<extra></extra>',
+                                text: currentData.filter(row => row[selectedColumn] != null).map(row => row.Point || 'Point')
                             }];
                         } else {
                             plotData = [{
@@ -607,7 +614,14 @@
                                     colorscale: colorMap,
                                     showscale: true,
                                     colorbar: { title: `${selectedColumn} (mm)` }
-                                }
+                                },
+                                hovertemplate: '<b>%{text}</b><br>' +
+                                             'X: %{x:.3f}<br>' +
+                                             'Y: %{y:.3f}<br>' +
+                                             'Z: %{z:.3f}<br>' +
+                                             'Value: %{marker.color:.3f}<br>' +
+                                             '<extra></extra>',
+                                text: currentData.filter(row => row[selectedColumn] != null).map(row => row.Point || 'Point')
                             }];
                         }
 
@@ -650,7 +664,13 @@
                                 colorbar: { title: `${selectedColumn} (mm)` },
                                 opacity: 0.8,
                                 line: { width: 0 }
-                            }
+                            },
+                            hovertemplate: '<b>%{text}</b><br>' +
+                                         'X: %{x:.3f}<br>' +
+                                         'Y: %{y:.3f}<br>' +
+                                         'Value: %{marker.color:.3f}<br>' +
+                                         '<extra></extra>',
+                            text: currentData.filter(row => row[selectedColumn] != null).map(row => row.Point || 'Point')
                         }];
 
                         layout = {
